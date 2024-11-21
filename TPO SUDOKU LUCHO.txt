@@ -1,0 +1,224 @@
+import random
+import time
+import copy
+import heapq
+
+nodos_explorados = 0  # Contador global para medir nodos explorados
+
+def generar_tablero_completo():
+    """Genera un tablero completo de Sudoku usando backtracking."""
+    tablero = [[0 for _ in range(9)] for _ in range(9)]
+    backtracking(tablero)
+    return tablero
+
+def crear_tablero_dificultad(tablero_completo, dificultad):
+    """Vacía celdas en el tablero completo asegurando una cantidad exacta de celdas vacías."""
+    tablero = copy.deepcopy(tablero_completo)
+    celdas_a_vaciar = {
+        1: random.randint(31, 46),  # Fácil
+        2: random.randint(22, 34),  # Medio
+        3: random.randint(10, 21)   # Difícil
+    }.get(dificultad, 0)
+
+    celdas_vaciadas = 0
+    posiciones = [(i, j) for i in range(9) for j in range(9)]
+    random.shuffle(posiciones)
+
+    while celdas_vaciadas < celdas_a_vaciar:
+        fila, columna = posiciones.pop(0)
+        if tablero[fila][columna] != 0:
+            temp = tablero[fila][columna]
+            tablero[fila][columna] = 0
+
+            if tiene_solucion_unica(tablero):
+                celdas_vaciadas += 1
+            else:
+                tablero[fila][columna] = temp  # Revertir si no tiene solución única
+
+    return tablero
+
+def imprimir_tablero(tablero):
+    """Imprime el tablero de Sudoku."""
+    for fila in tablero:
+        print(" ".join(str(num) if num != 0 else '.' for num in fila))
+    print("\n")
+
+def es_valido(tablero, fila, columna, numero):
+    """Chequea si un número puede colocarse en una celda sin violar las reglas."""
+    for i in range(9):
+        if tablero[fila][i] == numero or tablero[i][columna] == numero:
+            return False
+    inicio_fila, inicio_columna = 3 * (fila // 3), 3 * (columna // 3)
+    for i in range(inicio_fila, inicio_fila + 3):
+        for j in range(inicio_columna, inicio_columna + 3):
+            if tablero[i][j] == numero:
+                return False
+    return True
+def encontrar_celda_con_menos_opciones(tablero):
+    """Encuentra la celda vacía con menos opciones disponibles."""
+    mejor_fila, mejor_columna = -1, -1
+    min_opciones = 10
+    for i in range(9):
+        for j in range(9):
+            if tablero[i][j] == 0:
+                opciones = sum(1 for num in range(1, 10) if es_valido(tablero, i, j, num))
+                if opciones < min_opciones:
+                    min_opciones = opciones
+                    mejor_fila, mejor_columna = i, j
+    return mejor_fila, mejor_columna
+
+def backtracking(tablero):
+    """Backtracking optimizado seleccionando la celda con menos opciones."""
+    global nodos_explorados
+    nodos_explorados += 1
+
+    vacio = encontrar_celda_con_menos_opciones(tablero)
+    if vacio == (-1, -1):
+        return True
+    fila, columna = vacio
+    for numero in range(1, 10):
+        if es_valido(tablero, fila, columna, numero):
+            tablero[fila][columna] = numero
+            if backtracking(tablero):
+                return True
+            tablero[fila][columna] = 0
+    return False
+
+def branch_and_bound(tablero):
+    """Branch and Bound optimizado para resolver un Sudoku."""
+    global nodos_explorados
+
+    def calcular_cota(tablero):
+        """Calcula la cota basada en el número de celdas vacías."""
+        return sum(1 for fila in tablero for celda in fila if celda == 0)
+
+    def generar_opciones(tablero, fila, columna):
+        """Genera una lista de opciones válidas para una celda."""
+        return [num for num in range(1, 10) if es_valido(tablero, fila, columna, num)]
+
+    nodos_vivos = []
+    heapq.heappush(nodos_vivos, (calcular_cota(tablero), copy.deepcopy(tablero)))
+
+    while nodos_vivos:
+        _, nodo_actual = heapq.heappop(nodos_vivos)
+        nodos_explorados += 1
+        vacio = encontrar_vacio(nodo_actual)
+
+        if not vacio:
+            # Si no hay más celdas vacías, hemos encontrado una solución
+            for i in range(9):
+                for j in range(9):
+                    tablero[i][j] = nodo_actual[i][j]
+            return True
+
+        fila, columna = vacio
+        opciones = generar_opciones(nodo_actual, fila, columna)
+
+        for opcion in opciones:
+            nuevo_tablero = copy.deepcopy(nodo_actual)
+            nuevo_tablero[fila][columna] = opcion
+            cota = calcular_cota(nuevo_tablero)
+            heapq.heappush(nodos_vivos, (cota, nuevo_tablero))
+
+    return False
+def tiene_solucion_unica(tablero):
+    """Valida si un tablero tiene una única solución usando backtracking."""
+    soluciones = 0
+    def backtracking_validacion(tablero):
+        nonlocal soluciones
+        vacio = encontrar_vacio(tablero)
+        if not vacio:
+            soluciones += 1
+            return soluciones < 2
+        fila, columna = vacio
+        for numero in range(1, 10):
+            if es_valido(tablero, fila, columna, numero):
+                tablero[fila][columna] = numero
+                if not backtracking_validacion(tablero):
+                    return False
+                tablero[fila][columna] = 0
+        return True
+    backtracking_validacion(tablero)
+    return soluciones == 1
+
+def encontrar_vacio(tablero):
+    """Encuentra la primera celda vacía (valor 0) en el tablero."""
+    for i in range(9):
+        for j in range(9):
+            if tablero[i][j] == 0:
+                return (i, j)
+    return None
+
+def main():
+    global nodos_explorados
+    while True:
+        print("\nTrabajo Práctico Obligatorio - Resolución de un Sudoku")
+        print("1- Generar un tablero de Sudoku automáticamente.")
+        print("2- Ingresar el tablero de forma manual.")
+        print("0- Salir")
+        opcion = input("Seleccione una opción: ")
+
+        if opcion == '1':
+            print("\nElegir nivel de dificultad")
+            print("1- Fácil (De 31 a 46 números en el tablero inicial)")
+            print("2- Medio (De 22 a 34 números en el tablero inicial)")
+            print("3- Difícil (De 10 a 21 números en el tablero inicial)")
+            dificultad = int(input("Seleccione una dificultad: "))
+            if dificultad == 0:
+                continue
+            tablero_completo = generar_tablero_completo()
+            tablero = crear_tablero_dificultad(tablero_completo, dificultad)
+            print("\nTablero generado para resolver:")
+            imprimir_tablero(tablero)
+
+        elif opcion == '2':
+            print("Ingrese el tablero de Sudoku fila por fila, utilizando 0 para celdas vacías.")
+            tablero = ingresar_tablero()
+            print("\nTablero ingresado:")
+            imprimir_tablero(tablero)
+
+        elif opcion == '0':
+            print("Saliendo del programa.")
+            break
+
+        else:
+            print("Opción no válida.")
+            continue
+
+        while True:
+            print("\nSeleccione el método de resolución:")
+            print("1- Backtracking")
+            print("2- Branch & Bound (B&B)")
+            print("0- Volver al menú principal")
+            metodo = input("Ingrese el número de su elección: ")
+
+            if metodo == '1':
+                nodos_explorados = 0
+                start_time = time.time()
+                tablero_resuelto = copy.deepcopy(tablero)
+                if backtracking(tablero_resuelto):
+                    print("\nBacktracking - Solución encontrada:")
+                    imprimir_tablero(tablero_resuelto)
+                else:
+                    print("No se encontró una solución.")
+                print("Tiempo de ejecución:", round(time.time() - start_time, 4), "segundos")
+                print("Nodos explorados:", nodos_explorados)
+
+            elif metodo == '2':
+                nodos_explorados = 0
+                start_time = time.time()
+                tablero_resuelto = copy.deepcopy(tablero)
+                if branch_and_bound(tablero_resuelto):
+                    print("\nBranch & Bound - Solución encontrada:")
+                    imprimir_tablero(tablero_resuelto)
+                else:
+                    print("No se encontró una solución.")
+                print("Tiempo de ejecución:", round(time.time() - start_time, 4), "segundos")
+                print("Nodos explorados:", nodos_explorados)
+
+            elif metodo == '0':
+                break
+            else:
+                print("Método no válido. Intente de nuevo.")
+
+main()
